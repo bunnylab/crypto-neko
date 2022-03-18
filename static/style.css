@@ -1,0 +1,39 @@
+html {
+    height: 100%;
+}
+
+body {
+    height: 90%;
+    overflow: hidden;
+    text-align: center;
+    background-color: black;
+    margin: 15px;
+    font-family: Arial, Helvetica, sans-serif;
+
+}
+
+h2 {
+    color: whitesmoke;
+    text-align: left;
+    margin-left: 30px;
+  }
+
+#chat-log {
+    width: 90%;
+    height: 80%;
+    /* padding: 20px; */
+    background-color: grey;
+    font-size: 1.2em;
+    
+}
+
+#chat-input {
+    width: 90%;
+    height: 10%;
+    /* padding: 20px; */
+    margin-bottom: 20px;
+    background-color: grey;
+    /* min-height: 100px; */
+    font-size: 1.2em;
+
+}

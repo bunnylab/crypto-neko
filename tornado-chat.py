@@ -1,0 +1,86 @@
+import tornado.ioloop
+import tornado.web
+import tornado.websocket
+from tornado.escape import json_decode
+import os
+
+BUFFER_SIZE = 100
+DEFAULT_PORT = 3000
+MAX_CT = 512
+DEFAULT_NICK = "Alice"
+
+class MessagingBuffer:
+    
+    def __init__(self):
+        self.limit = BUFFER_SIZE
+        self.message_buffer = [None for i in range(self.limit)]
+        self.index = 0
+        self.current = 0
+
+    def _ordered_yield(self):
+        for i in range(self.limit):
+            x = (self.index + i) % self.limit
+            if self.message_buffer[x]:
+                yield self.message_buffer[x]
+
+    def push(self, msg):
+        self.message_buffer[self.index] = msg 
+        self.index = (self.index + 1) % self.limit
+        self.current += 1
+
+    def get_all(self):
+        return list(self._ordered_yield())
+
+buffer = MessagingBuffer()
+
+class MainHandler(tornado.web.RequestHandler):
+   
+    def get(self):
+        nick = self.get_argument("nick", DEFAULT_NICK)
+        self.render("index.html", name=nick)
+
+class EchoWebSocket(tornado.websocket.WebSocketHandler):
+    clients = set()
+
+    def check_origin(self, origin):
+        return True
+
+    @classmethod 
+    def broadcast(cls, msg):
+        for client in cls.clients:
+            try:
+                client.write_message(msg)
+            except:
+                print("error sending message")
+
+    def on_message(self, message):
+        msg = json_decode(message)
+        
+        if len(msg.get('ciphertext')) < MAX_CT:
+            buffer.push(msg)
+            EchoWebSocket.broadcast( {"messages": [msg]} )
+        else:
+            pass
+    
+    def open(self):
+        EchoWebSocket.clients.add(self)
+        self.write_message({'messages':buffer.get_all()})
+
+    def on_close(self):
+        EchoWebSocket.clients.remove(self)
+
+def make_app():
+    settings = {
+        "static_path": os.path.join(os.path.dirname(__file__), "static"),
+        "template_path": os.path.join(os.path.dirname(__file__), "templates"),
+    }
+
+    return tornado.web.Application([
+        (r"/", MainHandler),
+        (r"/websocket", EchoWebSocket),
+    ], **settings)
+
+if __name__ == "__main__":
+    app = make_app()
+    app.listen(DEFAULT_PORT)
+    tornado.ioloop.IOLoop.current().start()
