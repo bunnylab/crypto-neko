@@ -1,6 +1,7 @@
 const chatlog = document.getElementById('chat-log');
 const chatinput = document.getElementById('chat-input');
 const displayname = document.getElementById('hidden-name').getAttribute('displayname');
+const roomcode = document.getElementById('hidden-room').getAttribute('roomcode');
 
 var g_nacl = null;
 var g_key = null;
@@ -90,7 +91,7 @@ function passwordPrompt(){
 
 function start_ws() {
     console.log("Starting websockets...");
-    ws = new WebSocket("ws://" + location.host + "/websocket");
+    ws = new WebSocket("ws://" + location.host + "/" + roomcode + "/websocket");
     ws.onopen = function() {
     };
     ws.onmessage = message_receive;
