@@ -94,6 +94,9 @@ function start_ws() {
     ws = new WebSocket("ws://" + location.host + "/" + roomcode + "/websocket");
     ws.onopen = function() {
     };
+    ws.onclose = function() {
+        alert("Connection Closed. Refresh Page, nya.");
+    }
     ws.onmessage = message_receive;
 
     clearLog();

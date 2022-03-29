@@ -9,6 +9,7 @@ BUFFER_SIZE = 100
 DEFAULT_PORT = 3000
 MAX_CT = 512
 DEFAULT_NICK = "Alice"
+DEFAULT_PING_INTERVAL = 10
 
 class MessagingBuffer:
     
@@ -107,7 +108,6 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
             pass
     
     def open(self, code):
-        print("websocket code", code)
         self._code = code
 
         if not EchoWebSocket.rooms.get(code):
@@ -119,12 +119,11 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
         self.write_message({'messages':buffer.get_all()})
 
     def on_close(self):
-        print("websocket code", self._code)
-        print(EchoWebSocket.rooms.get(self._code))
         EchoWebSocket.rooms.get(self._code).remove(self)
 
 def make_app():
     settings = {
+        "websocket_ping_interval": DEFAULT_PING_INTERVAL,
         "static_path": os.path.join(os.path.dirname(__file__), "static"),
         "template_path": os.path.join(os.path.dirname(__file__), "templates"),
     }
