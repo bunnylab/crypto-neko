@@ -40,25 +40,27 @@ class RoomQueue:
         self.map = {}
         self.rooms = []
         for i in range(MAX_ROOMS):
-            self.rooms.append( MessagingBuffer() )
+            self.rooms.append( None )
 
     def room_code(self):
         return ''.join(random.choice(string.ascii_letters) for x in range(5))
 
     def new_room(self):
-        self.current = (self.current + 1) % MAX_ROOMS
+        
         self.rooms[self.current] = MessagingBuffer()
         for key, index in self.map.items():
             if self.current == index:
-                self.map.pop(index)
+                self.map.pop(key)
+                break
         
         code = self.room_code()
         self.map[code] = self.current
-
+        self.current = (self.current + 1) % MAX_ROOMS
+     
         return code
 
     def room_index(self, code):
-        return self.map.get(code)
+        return self.map.get(code, None)
 
 rq = RoomQueue()
 
@@ -73,7 +75,7 @@ class RoomHandler(tornado.web.RequestHandler):
     def get(self, code):
         nick = self.get_argument("nick", DEFAULT_NICK)
         index = rq.room_index(code)
-        if not index:
+        if index == None:
             raise tornado.web.HTTPError(
                 status_code=404,
                 reason="Room Not Found, nya"
@@ -97,7 +99,6 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
                 print("error sending message")
 
     def on_message(self, message):
-        print("websocket code", self._code)
         msg = json_decode(message)
         buffer = rq.rooms[rq.room_index(self._code)]
         
