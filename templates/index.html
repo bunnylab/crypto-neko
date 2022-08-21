@@ -7,13 +7,20 @@
     <title>CryptoNeko</title>
     <link rel="stylesheet" href="{{ static_url("style.css") }}">
   </head>
-  <h2>CryptoNeko Chat</h2>
+  <h2></h2>
   <body>    
     <input id=hidden-name type="hidden" displayname={{name}}>
     <input id=hidden-room type="hidden" roomcode={{room}}>
-    <textarea id="chat-log" name="chat-log"></textarea>
+    <!-- <textarea id="chat-log" name="chat-log"></textarea> -->
+    <div class="mainrow">
+      <div id="chat-log" name="chat-log"></div>
+      <div id="alias-online" name="alias-online"></div>
+    </div>
         <p></p>
-    <input id="chat-input" name="chat-input" onkeypress="input_handler(event)">
+    <div class="inputrow">
+      <input id="chat-input" name="chat-input" onkeypress="input_handler(event)" autofocus>
+      <div id="input-spacer"></div> 
+    </div>
     
   <script src="{{ static_url("lib/nacl_factory.js") }}"></script>
   <script src="{{ static_url("lib/scrypt.js") }}"></script>

@@ -11,6 +11,7 @@ MAX_CT = 512
 DEFAULT_NICK = "Alice"
 DEFAULT_PING_INTERVAL = 10
 
+
 class MessagingBuffer:
     
     def __init__(self):
@@ -63,6 +64,7 @@ class RoomQueue:
         return self.map.get(code, None)
 
 rq = RoomQueue()
+rs = {}
 
 class MainHandler(tornado.web.RequestHandler):
    
@@ -85,24 +87,23 @@ class RoomHandler(tornado.web.RequestHandler):
             
 
 class EchoWebSocket(tornado.websocket.WebSocketHandler):
-    rooms = {}
 
     def check_origin(self, origin):
         return True
 
     @classmethod 
     def broadcast(cls, code, msg):
-        for client in cls.rooms.get(code, []):
+        for sock in rs.get(code, []):
             try:
-                client.write_message(msg)
+                sock.write_message(msg)
             except:
                 print("error sending message")
 
     def on_message(self, message):
         msg = json_decode(message)
         buffer = rq.rooms[rq.room_index(self._code)]
-        
-        if len(msg.get('ciphertext')) < MAX_CT:
+            
+        if 'ciphertext' in msg and len(msg.get('ciphertext')) < MAX_CT:
             buffer.push(msg)
             EchoWebSocket.broadcast(self._code, {"messages": [msg]} )
         else:
@@ -111,16 +112,16 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
     def open(self, code):
         self._code = code
 
-        if not EchoWebSocket.rooms.get(code):
-            EchoWebSocket.rooms[code] = set()
-        EchoWebSocket.rooms.get(code).add(self)
+        if not rs.get(code):
+            rs[code] = set()
+        rs.get(code).add(self)
 
-        
         buffer =  rq.rooms[rq.room_index(code)]
         self.write_message({'messages':buffer.get_all()})
 
+
     def on_close(self):
-        EchoWebSocket.rooms.get(self._code).remove(self)
+        rs.get(self._code).remove(self)
 
 def make_app():
     settings = {

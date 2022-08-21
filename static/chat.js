@@ -1,6 +1,8 @@
 const chatlog = document.getElementById('chat-log');
 const chatinput = document.getElementById('chat-input');
-const displayname = document.getElementById('hidden-name').getAttribute('displayname');
+const aliasonline = document.getElementById('alias-online');
+
+//const displayname = document.getElementById('hidden-name').getAttribute('displayname');
 const roomcode = document.getElementById('hidden-room').getAttribute('roomcode');
 
 var g_nacl = null;
@@ -8,8 +10,38 @@ var g_key = null;
 var g_ws = null;
 const defaultSalt = "insertdefaultsalthere";
 
+var displayname;
+var lastAlias = null;
+
+function alias_joined(alias){
+    aliasonline.innerHTML += (`<div id="${alias}" class="alias">${alias}</div>`);
+    system_message(alias + ' joined');
+}
+
+function alias_left(alias){
+    const element = document.getElementById(`${alias}`);
+    element.remove();
+    system_message(alias + ' left')
+}
+
+function system_message(txt){
+    chatlog.innerHTML += (`<div id="chat-header" class="msg">${txt}</div>`);
+}
+
 function append_message(txt, displayname){
-    chatlog.value += (`${displayname}: ${txt}\n`);
+    if(displayname != lastAlias){
+        const options = {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric'
+        }
+        const timestamp = new Date().toLocaleString('en-US', options);
+        chatlog.innerHTML += (`<div id="chat-header"><div id="header-name">${displayname}  </div><div id="header-timestamp">${timestamp}</div></div>`);
+        lastAlias = displayname;
+    }
+    chatlog.innerHTML += (`<div id="chat-msg" class="msg">${txt}</div>`);
+        
 }
 
 async function input_handler(e){
@@ -17,7 +49,7 @@ async function input_handler(e){
     let max_len = 256;
     if (key==13){
         if (chatinput.value.length > max_len) {
-            append_message(`Message exceeds max chars: ${max_len}`, "System");
+            system_message(`Message exceeds max chars: ${max_len}`);
         } else{
             message_send(chatinput.value);
         }
@@ -25,9 +57,9 @@ async function input_handler(e){
     }
 }
 
-function message_send(msg){
-    plaintext = JSON.stringify({'msg': msg, 'nick':displayname})
-    
+function send_json(val){
+    plaintext = JSON.stringify(val);
+
     // encode and then encrypt string with key+nonce
     m = g_nacl.encode_utf8(plaintext);
     n = g_nacl.crypto_secretbox_random_nonce();
@@ -40,30 +72,51 @@ function message_send(msg){
     // send ciphertext with nonce
     ws.send(JSON.stringify({'ciphertext': b64c, 
         'nonce': b64n}));
+}
 
+async function message_send(msg){
+    send_json({'msg': msg, 'nick':displayname});
     // scroll to bottom 
+    // ok this is a bit hacky we have a race condition with the 
+    // message receive which increases the height when we actually 
+    // receive the message. Rather than complicating our program 
+    // structure by having logic to add the message to log on send
+    // we sleep until it bounces back from network. 
+    await new Promise(r => setTimeout(r, 300));
     chatlog.scrollTop = chatlog.scrollHeight;
 }
 
 function message_receive(evt, nacl){
     // get list of messages
     data = JSON.parse(evt.data);
-    messages = data.messages;
 
-    for(let i=0; i<messages.length; i++){
-        // decode nonce and cipher from base64
-        nonce = base64DecToArr(messages[i].nonce);
-        cipher = base64DecToArr(messages[i].ciphertext);
-        
-        try {
-            msg_raw = g_nacl.crypto_secretbox_open(cipher,
-                nonce, 
-                g_key);
-            msg = JSON.parse(g_nacl.decode_utf8(msg_raw));
-            append_message(msg.msg, msg.nick);
-        } catch(error) {
-            append_message("Decryption error", "System");
-        }  
+    if("messages" in data){
+        messages = data.messages;
+        for(let i=0; i<messages.length; i++){
+            // decode nonce and cipher from base64
+            nonce = base64DecToArr(messages[i].nonce);
+            cipher = base64DecToArr(messages[i].ciphertext);
+            
+            try {
+                msg_raw = g_nacl.crypto_secretbox_open(cipher,
+                    nonce, 
+                    g_key);
+                msg = JSON.parse(g_nacl.decode_utf8(msg_raw));
+                console.log(msg);
+                if('msg' in msg && 'nick' in msg){
+                    append_message(msg.msg, msg.nick);
+                }
+                if('joined' in msg && 'nick' in msg){
+                    alias_joined(msg.nick);
+                }
+                if('left' in msg && 'nick' in msg){
+                    alias_left(msg.nick);
+                }
+                
+            } catch(error) {
+                system_message("Decryption error");
+            }  
+        }
     }
 }
 
@@ -84,20 +137,38 @@ function clearLog(){
     chatlog.value = '';
 }
 
+function nicknamePrompt(){
+    const nick = prompt("Enter an alias for chat");
+    return nick;
+}
+
 function passwordPrompt(){
     const password = prompt("Enter a password for chat encryption");
     return password;
+}
+
+function joined_message(ws){
+    send_json({'joined':true, 'nick':displayname});
+}
+
+function left_message(ws){
+    send_json({'left':true, 'nick':displayname});
 }
 
 function start_ws() {
     console.log("Starting websockets...");
     ws = new WebSocket("ws://" + location.host + "/" + roomcode + "/websocket");
     ws.onopen = function() {
+        joined_message(ws);
     };
     ws.onclose = function() {
+        left_message(ws);
         alert("Connection Closed. Refresh Page, nya.");
     }
     ws.onmessage = message_receive;
+
+    // close ws if tab/window closed
+    window.onbeforeunload = ws.onclose;
 
     clearLog();
 }
@@ -112,6 +183,7 @@ function nacl_ready(nacl){
 function scrypt_ready(scrypt){
     console.log("Loading js-scrypt...");
     g_scrypt = scrypt; 
+    displayname = nicknamePrompt();
     const password = passwordPrompt();
     deriveKey(password);
     
