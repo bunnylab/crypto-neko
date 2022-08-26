@@ -1,14 +1,12 @@
 const chatlog = document.getElementById('chat-log');
 const chatinput = document.getElementById('chat-input');
 const aliasonline = document.getElementById('alias-online');
-
-//const displayname = document.getElementById('hidden-name').getAttribute('displayname');
 const roomcode = document.getElementById('hidden-room').getAttribute('roomcode');
 
 var g_nacl = null;
 var g_key = null;
 var g_ws = null;
-const defaultSalt = "insertdefaultsalthere";
+const defaultSalt = "systemwidesalt" + roomcode;
 
 var displayname;
 var lastAlias = null;
@@ -86,7 +84,7 @@ async function message_send(msg){
     chatlog.scrollTop = chatlog.scrollHeight;
 }
 
-function message_receive(evt, nacl){
+async function message_receive(evt, nacl){
     // get list of messages
     data = JSON.parse(evt.data);
 
@@ -102,7 +100,6 @@ function message_receive(evt, nacl){
                     nonce, 
                     g_key);
                 msg = JSON.parse(g_nacl.decode_utf8(msg_raw));
-                console.log(msg);
                 if('msg' in msg && 'nick' in msg){
                     append_message(msg.msg, msg.nick);
                 }
@@ -117,6 +114,7 @@ function message_receive(evt, nacl){
                 system_message("Decryption error");
             }  
         }
+        chatlog.scrollTop = chatlog.scrollHeight;
     }
 }
 
@@ -129,7 +127,6 @@ function deriveKey(password){
     var salt = g_scrypt.encode_utf8(defaultSalt);
     var keyBytes = g_scrypt.crypto_scrypt(password, salt, N, r, p, L);
 
-    //g_key = g_nacl.random_bytes(32);
     g_key = keyBytes;
 }
 
@@ -138,12 +135,18 @@ function clearLog(){
 }
 
 function nicknamePrompt(){
-    const nick = prompt("Enter an alias for chat");
+    var nick = null;
+    while(!nick){
+        nick = prompt("Enter a chat alias");
+    }
     return nick;
 }
 
 function passwordPrompt(){
-    const password = prompt("Enter a password for chat encryption");
+    var password = null;
+    while(!password){
+        password = prompt("Enter a password for chat encryption");
+    }
     return password;
 }
 
