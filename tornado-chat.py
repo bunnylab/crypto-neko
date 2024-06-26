@@ -63,20 +63,18 @@ class RoomQueue:
     def room_index(self, code):
         return self.map.get(code, None)
 
-rq = RoomQueue()
-rs = {}
 
 class MainHandler(tornado.web.RequestHandler):
    
     def get(self):
-        code = rq.new_room()
+        code = self.application.room_queue.new_room()
         self.redirect(f"%s" % (code,) )
 
 class RoomHandler(tornado.web.RequestHandler):
 
     def get(self, code):
         nick = self.get_argument("nick", DEFAULT_NICK)
-        index = rq.room_index(code)
+        index = self.application.room_queue.room_index(code)
         if index == None:
             raise tornado.web.HTTPError(
                 status_code=404,
@@ -91,9 +89,8 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
     def check_origin(self, origin):
         return True
 
-    @classmethod 
-    def broadcast(cls, code, msg):
-        for sock in rs.get(code, []):
+    def broadcast(self, code, msg):
+        for sock in self.application.room_set.get(code, []):
             try:
                 sock.write_message(msg)
             except:
@@ -101,27 +98,27 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
 
     def on_message(self, message):
         msg = json_decode(message)
-        buffer = rq.rooms[rq.room_index(self._code)]
+        buffer = self.application.room_queue.rooms[self.application.room_queue.room_index(self._code)]
             
         if 'ciphertext' in msg and len(msg.get('ciphertext')) < MAX_CT:
             buffer.push(msg)
-            EchoWebSocket.broadcast(self._code, {"messages": [msg]} )
+            self.broadcast(self._code, {"messages": [msg]} )
         else:
             pass
     
     def open(self, code):
         self._code = code
 
-        if not rs.get(code):
-            rs[code] = set()
-        rs.get(code).add(self)
+        if not self.application.room_set.get(code):
+            self.application.room_set[code] = set()
+        self.application.room_set.get(code).add(self)
 
-        buffer =  rq.rooms[rq.room_index(code)]
+        buffer =  self.application.room_queue.rooms[self.application.room_queue.room_index(code)]
         self.write_message({'messages':buffer.get_all()})
 
 
     def on_close(self):
-        rs.get(self._code).remove(self)
+        self.application.room_set.get(self._code).remove(self)
 
 def make_app():
     settings = {
@@ -138,5 +135,7 @@ def make_app():
 
 if __name__ == "__main__":
     app = make_app()
+    app.room_queue = RoomQueue()
+    app.room_set = {}
     app.listen(DEFAULT_PORT)
     tornado.ioloop.IOLoop.current().start()
