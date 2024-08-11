@@ -38,7 +38,7 @@ function append_message(txt, displayname){
         chatlog.innerHTML += (`<div id="chat-header"><div id="header-name">${displayname}  </div><div id="header-timestamp">${timestamp}</div></div>`);
         lastAlias = displayname;
     }
-    chatlog.innerHTML += (`<div id="chat-msg" class="msg">${txt}</div>`);
+    chatlog.innerHTML += (`<div id="chat-msg" class="msg"><code>${txt}</code></div>`);
         
 }
 

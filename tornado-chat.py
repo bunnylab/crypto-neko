@@ -2,7 +2,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 from tornado.escape import json_decode
-import os, string, random
+import os, string, random, json
 
 MAX_ROOMS = 50
 BUFFER_SIZE = 100
@@ -10,15 +10,23 @@ DEFAULT_PORT = 3000
 MAX_CT = 512
 DEFAULT_NICK = "Alice"
 DEFAULT_PING_INTERVAL = 10
+LOG_DIRECTORY = "/tmp/cryptoneko"
 
 
 class MessagingBuffer:
     
-    def __init__(self):
+    def __init__(self, code=None):
         self.limit = BUFFER_SIZE
         self.message_buffer = [None for i in range(self.limit)]
         self.index = 0
         self.current = 0
+
+        # here is where we will try to just add in a file system 
+        self.log_file = f"{code}.log"
+
+        with open(self.log_file, "w") as writeit:
+            pass 
+
 
     def _ordered_yield(self):
         for i in range(self.limit):
@@ -27,12 +35,20 @@ class MessagingBuffer:
                 yield self.message_buffer[x]
 
     def push(self, msg):
-        self.message_buffer[self.index] = msg 
-        self.index = (self.index + 1) % self.limit
-        self.current += 1
+        # self.message_buffer[self.index] = msg 
+        # self.index = (self.index + 1) % self.limit
+        # self.current += 1
+        with open(self.log_file, "a") as log:
+            print(msg)
+            log.write(json.dumps(msg) + "\n")
 
     def get_all(self):
-        return list(self._ordered_yield())
+        #return list(self._ordered_yield())
+        with open(self.log_file, "r") as log:
+            raw = log.readlines()
+            print("debug this!")
+            print(raw)
+            return [json.loads(x) for x in raw]
 
 class RoomQueue:
 
@@ -40,21 +56,36 @@ class RoomQueue:
         self.current = 0
         self.map = {}
         self.rooms = []
-        for i in range(MAX_ROOMS):
-            self.rooms.append( None )
+        # for i in range(MAX_ROOMS):
+        #     self.rooms.append( None )
+
+        # refactor all this crap to not use the arrays and other structures 
+        # I think all we really need here is a dictionary of the current rooms 
+        # so we put the code as the key and then add the buffer as the content 
+        # and we don't need anything else 
+        # lets see if we can use linux log rotation utilities to handle the chat 
+        # logs and manage the number of files
+        if not os.path.exists(LOG_DIRECTORY):
+            os.makedirs(directory)
+        log_files = os.listdir(LOG_DIRECTORY)
+        for f in log_files:
+            print(f)
+            if f.endswith(".log")
+            self.rooms.append()
 
     def room_code(self):
         return ''.join(random.choice(string.ascii_letters) for x in range(5))
 
     def new_room(self):
         
-        self.rooms[self.current] = MessagingBuffer()
+        code = self.room_code()
+        self.rooms[self.current] = MessagingBuffer(code=code)
         for key, index in self.map.items():
             if self.current == index:
                 self.map.pop(key)
                 break
         
-        code = self.room_code()
+        
         self.map[code] = self.current
         self.current = (self.current + 1) % MAX_ROOMS
      
