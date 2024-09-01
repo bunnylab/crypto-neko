@@ -184,8 +184,12 @@ function left_message(ws){
 
 function start_ws() {
     clearLog();
-    console.log("Starting websockets...");
-    ws = new WebSocket("ws://" + location.host + "/" + roomcode + "/websocket");
+    if(location.host.endsWith(".onion") || location.host.startsWith("127.0.0.1")) {
+        ws = new WebSocket("ws://" + location.host + "/" + roomcode + "/websocket");
+    }
+    else{
+        ws = new WebSocket("wss://" + location.host + "/" + roomcode + "/websocket");
+    }
     ws.onopen = function() {
         joined_message(ws);
     };
