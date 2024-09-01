@@ -3,30 +3,53 @@ const chatinput = document.getElementById('chat-input');
 const aliasonline = document.getElementById('alias-online');
 const roomcode = document.getElementById('hidden-room').getAttribute('roomcode');
 
+const pingInterval = 60000
+const timeoutSweep = 2000
+const timeoutInterval = pingInterval * 2
+
 var g_nacl = null;
 var g_key = null;
 var g_ws = null;
 const defaultSalt = "systemwidesalt" + roomcode;
 
+var aliases = new Map();
+
 var displayname;
 var lastAlias = null;
 
-function alias_joined(alias){
-    aliasonline.innerHTML += (`<div id="${alias}" class="alias">${alias}</div>`);
-    system_message(alias + ' joined');
+function alias_joined(alias, timestamp){
+    if (aliases.has(alias)) {
+        aliases.set(alias, timestamp)
+    }
+    else {
+        aliases.set(alias, timestamp)
+        aliasonline.innerHTML += (`<div id="${alias}" class="alias">${alias}</div>`);
+        system_message(alias + ' joined');
+    }
+    
 }
 
-function alias_left(alias){
+function alias_left(alias, message){
     const element = document.getElementById(`${alias}`);
     element.remove();
-    system_message(alias + ' left')
+    aliases.delete(alias);
+    system_message(alias + ' ' + message)
+}
+
+function timeout_aliases() {
+    for (let [alias, timestamp] of aliases) {
+        const v = Date.now() - timestamp;
+        if (v > timeoutInterval) {
+            alias_left(alias, 'timed out')
+        }
+    }
 }
 
 function system_message(txt){
     chatlog.innerHTML += (`<div id="chat-header" class="msg">${txt}</div>`);
 }
 
-function append_message(txt, displayname){
+function append_message(txt, displayname, timestamp){
     if(displayname != lastAlias){
         const options = {
             month: 'short',
@@ -34,11 +57,11 @@ function append_message(txt, displayname){
             hour: 'numeric',
             minute: 'numeric'
         }
-        const timestamp = new Date().toLocaleString('en-US', options);
-        chatlog.innerHTML += (`<div id="chat-header"><div id="header-name">${displayname}  </div><div id="header-timestamp">${timestamp}</div></div>`);
+        const displayDate = timestamp.toLocaleString('en-US', options);
+        chatlog.innerHTML += (`<div id="chat-header"><div id="header-name">${displayname}  </div><div id="header-timestamp">${displayDate}</div></div>`);
         lastAlias = displayname;
     }
-    chatlog.innerHTML += (`<div id="chat-msg" class="msg"><code>${txt}</code></div>`);
+    chatlog.innerHTML += (`<div id="chat-msg" class="msg">${txt}</div>`);
         
 }
 
@@ -71,9 +94,9 @@ function send_json(val){
     ws.send(JSON.stringify({'ciphertext': b64c, 
         'nonce': b64n}));
 }
-
+ 
 async function message_send(msg){
-    send_json({'msg': msg, 'nick':displayname});
+    send_json({'msg': msg, 'nick':displayname, 'timestamp':Date.now()});
     // scroll to bottom 
     // ok this is a bit hacky we have a race condition with the 
     // message receive which increases the height when we actually 
@@ -100,14 +123,15 @@ async function message_receive(evt, nacl){
                     nonce, 
                     g_key);
                 msg = JSON.parse(g_nacl.decode_utf8(msg_raw));
+                msgTime = new Date(msg.timestamp);
                 if('msg' in msg && 'nick' in msg){
-                    append_message(msg.msg, msg.nick);
+                    append_message(msg.msg, msg.nick, msgTime);
                 }
                 if('joined' in msg && 'nick' in msg){
-                    alias_joined(msg.nick);
+                    alias_joined(msg.nick, msgTime);
                 }
                 if('left' in msg && 'nick' in msg){
-                    alias_left(msg.nick);
+                    alias_left(msg.nick, 'left room');
                 }
                 
             } catch(error) {
@@ -131,7 +155,7 @@ function deriveKey(password){
 }
 
 function clearLog(){
-    chatlog.value = '';
+    chatlog.innerHTML = '';
 }
 
 function nicknamePrompt(){
@@ -151,14 +175,15 @@ function passwordPrompt(){
 }
 
 function joined_message(ws){
-    send_json({'joined':true, 'nick':displayname});
-}
+    send_json({'joined':true, 'nick':displayname, 'timestamp':Date.now()});
+} 
 
 function left_message(ws){
-    send_json({'left':true, 'nick':displayname});
+    send_json({'left':true, 'nick':displayname, 'timestamp':Date.now()});
 }
 
 function start_ws() {
+    clearLog();
     console.log("Starting websockets...");
     ws = new WebSocket("ws://" + location.host + "/" + roomcode + "/websocket");
     ws.onopen = function() {
@@ -166,14 +191,17 @@ function start_ws() {
     };
     ws.onclose = function() {
         left_message(ws);
-        alert("Connection Closed. Refresh Page, nya.");
+        window.setTimeout(start_ws, 2000);
     }
     ws.onmessage = message_receive;
 
     // close ws if tab/window closed
     window.onbeforeunload = ws.onclose;
 
-    clearLog();
+    // set timeouts and ping join messages 
+    window.setInterval(joined_message, pingInterval);
+    window.setInterval(timeout_aliases, timeoutSweep);
+
 }
 
 function nacl_ready(nacl){
